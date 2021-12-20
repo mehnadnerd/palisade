@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
   // read file input
 
   // enncrypt
-  for (int i = 0; i < 1000000; ++i) {
+  for (int i = 0; i < 10; ++i) {
     CKKSwrapper crypto;
     crypto.KeyGen(max_depth, scale_factor, batch_size);
     auto enc_beta = crypto.Encrypt(beta);
@@ -198,5 +198,7 @@ int main(int argc, char** argv) {
     //  }
     //  printf("eq %i %f, %f, %lu\n",features, sqerr1, sqerr2,
     //  res_plain.size());
+    delete enc_beta;
+    delete enc_bias;
   }
 }

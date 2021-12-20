@@ -26,19 +26,122 @@
 
 using namespace lbcrypto;
 
+#define Tasdf std::shared_ptr<CiphertextImpl<DCRTPoly>>
+
+void dp(const CryptoContext<DCRTPoly> &cryptoContext,
+        const Tasdf &orig,
+        const LPKeyPair<DCRTPoly> &keyPair) {
+    //Plaintext p;
+    //cryptoContext->Decrypt(keyPair.secretKey, orig,
+    //                       &p);
+    //std::cout << p << std::endl;
+}
+
+Tasdf reduce(const CryptoContext<DCRTPoly> &cryptoContext,
+                                             const Tasdf &orig,
+             const LPKeyPair<DCRTPoly> &keyPair) {
+  std::vector<Tasdf> arr;
+  arr.push_back(orig);
+  for (int i = 1; i < 8; ++i) {
+    auto a = cryptoContext->EvalAtIndex(orig, i);
+    arr.push_back(a);
+    dp(cryptoContext, a, keyPair);
+  }
+  auto a = cryptoContext->EvalMultMany(arr);
+  return a;
+}
+
+
+
+void asdf(const CryptoContext<DCRTPoly> &cryptoContext,
+          const LPKeyPair<DCRTPoly> &keyPair,
+          const std::vector<int64_t> &pass) {
+  std::vector<int64_t> neg_upper;
+  std::vector<int64_t> neg_lower;
+  std::vector<int64_t> pos_upper;
+  std::vector<int64_t> pos_lower;
+  for (int i = 0; i < (int)pass.size(); ++i) {
+    neg_upper.push_back(-155);
+    neg_lower.push_back(-219);
+    pos_upper.push_back(5850);
+    pos_lower.push_back(11834);
+  }
+
+  Plaintext password = cryptoContext->MakePackedPlaintext(pass);
+  Plaintext pneg_upper = cryptoContext->MakePackedPlaintext(neg_upper);
+  Plaintext pneg_lower = cryptoContext->MakePackedPlaintext(neg_lower);
+  Plaintext ppos_upper = cryptoContext->MakePackedPlaintext(pos_upper);
+  Plaintext ppos_lower = cryptoContext->MakePackedPlaintext(pos_lower);
+
+  // The encoded vectors are encrypted
+  auto cp = cryptoContext->Encrypt(keyPair.publicKey, password);
+
+
+  // shift right and sub for repeated char, 0 if repeated
+  auto cp_shift_right = cryptoContext->EvalAtIndex(cp, -1);
+  auto cp_shift_sub = cryptoContext->EvalSub(cp, cp_shift_right);
+
+
+
+  // 0x41 -> 0x5A For upper, x^2 - 155 x + 5850
+  // 0x61 -> 0x7A For lower, x^2 - 219 x + 11834
+  // simple polynomial for character classes, negative if match
+
+  auto cp_square = cryptoContext->EvalMult(cp, cp); // depth 1
+  auto cp_upper_mul = cryptoContext->EvalMult(cp, pneg_upper); // depth 1
+  auto cp_lower_mul = cryptoContext->EvalMult(cp, pneg_lower);
+
+  auto cp_upper_sum1 = cryptoContext->EvalAdd(cp_upper_mul, cp_square); // depth 2
+  auto cp_lower_sum1 = cryptoContext->EvalAdd(cp_lower_mul, cp_square);
+
+  auto cp_upper_sum2 = cryptoContext->EvalAdd(cp_upper_sum1, ppos_upper); // depth 3
+  auto cp_lower_sum2 = cryptoContext->EvalAdd(cp_lower_sum1, ppos_lower);
+
+  auto mulaccum1 = reduce(cryptoContext, cp_shift_sub, keyPair);
+  auto mulaccum2 = reduce(cryptoContext, cp_upper_sum2, keyPair);
+  auto mulaccum3 = reduce(cryptoContext, cp_lower_sum2, keyPair);
+
+  // Sample Program: Step 5 - Decryption
+
+  // Decrypt the result of additions
+  Plaintext repeatedCharPlain;
+  cryptoContext->Decrypt(keyPair.secretKey, mulaccum1,
+                         &repeatedCharPlain);
+  repeatedCharPlain->SetLength(pass.size());
+
+  Plaintext upperPlain;
+  cryptoContext->Decrypt(keyPair.secretKey, mulaccum2,
+                         &upperPlain); // great design - crashed with undefined instruction if use repeatedCharPlain
+  upperPlain->SetLength(pass.size());
+
+  Plaintext lowerPlain;
+  cryptoContext->Decrypt(keyPair.secretKey, mulaccum3,
+                         &lowerPlain);
+  lowerPlain->SetLength(pass.size());
+
+
+  //std::cout << "Plaintext     : " << password << std::endl;
+  //std::cout << "Result part 1: " << repeatedCharPlain << std::endl;
+  //std::cout << "Repeated plain: " << repeatedCharPlain << std::endl;
+  //std::cout << "Upper plain   : " << upperPlain << std::endl; // n.b. doesn't work because overflowsxs
+//  std::cout << "Result part 3: " << lowerPlain << std::endl;
+  //std::cout << std::endl;
+}
+
 int main() {
   // Sample Program: Step 1 - Set CryptoContext
 
   // Set the main parameters
   int plaintextModulus = 65537;
-  double sigma = 3.2;
+  float sigma = 3.2;
   SecurityLevel securityLevel = HEStd_128_classic;
-  uint32_t depth = 2;
+  int depth = 9;
 
   // Instantiate the crypto context
   CryptoContext<DCRTPoly> cryptoContext =
-      CryptoContextFactory<DCRTPoly>::genCryptoContextBGVrns(
-          depth, plaintextModulus, securityLevel, sigma, depth, OPTIMIZED, BV);
+     CryptoContextFactory<DCRTPoly>::genCryptoContextBGVrns(
+         depth, plaintextModulus, securityLevel, sigma, depth, OPTIMIZED, BV);
+     // CryptoContextFactory<DCRTPoly>::genCryptoContextNull(2048, plaintextModulus);
 
   // Enable features that you wish to use
   cryptoContext->Enable(ENCRYPTION);
@@ -57,93 +160,28 @@ int main() {
   cryptoContext->EvalMultKeyGen(keyPair.secretKey);
 
   // Generate the rotation evaluation keys
-  cryptoContext->EvalAtIndexKeyGen(keyPair.secretKey, {1, 2, -1, -2});
+  cryptoContext->EvalAtIndexKeyGen(keyPair.secretKey, {-1, 1, 2, 3, 4, 5, 6, 7});
 
   // Sample Program: Step 3 - Encryption
 
   // First plaintext vector is encoded
-  std::vector<int64_t> vectorOfInts1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-  Plaintext plaintext1 = cryptoContext->MakePackedPlaintext(vectorOfInts1);
-  // Second plaintext vector is encoded
-  std::vector<int64_t> vectorOfInts2 = {3, 2, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-  Plaintext plaintext2 = cryptoContext->MakePackedPlaintext(vectorOfInts2);
-  // Third plaintext vector is encoded
-  std::vector<int64_t> vectorOfInts3 = {1, 2, 5, 2, 5, 6, 7, 8, 9, 10, 11, 12};
-  Plaintext plaintext3 = cryptoContext->MakePackedPlaintext(vectorOfInts3);
+  std::vector<int64_t> pass1 = {'p', 'a', 's', 's', 'w', 'o', 'r', 'd'};
+  std::vector<int64_t> pass2 = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
+  std::vector<int64_t> pass3 = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
+  std::vector<int64_t> pass4 = {'A', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
 
-  // The encoded vectors are encrypted
-  auto ciphertext1 = cryptoContext->Encrypt(keyPair.publicKey, plaintext1);
-  auto ciphertext2 = cryptoContext->Encrypt(keyPair.publicKey, plaintext2);
-  auto ciphertext3 = cryptoContext->Encrypt(keyPair.publicKey, plaintext3);
+  asdf(cryptoContext, keyPair, pass1);
+  asdf(cryptoContext, keyPair, pass2);
+  asdf(cryptoContext, keyPair, pass3);
+  asdf(cryptoContext, keyPair, pass4);
 
-  // Sample Program: Step 4 - Evaluation
-
-
-
-  // Homomorphic additions
-  auto ciphertextAdd12 = cryptoContext->EvalAdd(ciphertext1, ciphertext2);
-  auto ciphertextAddResult =
-      cryptoContext->EvalAdd(ciphertextAdd12, ciphertext3);
-
-  // Homomorphic multiplications
-  // modulus switching is done automatically because by default the modulus
-  // switching method is set to AUTO (rather than MANUAL)
-  auto ciphertextMul12 = cryptoContext->EvalMult(ciphertext1, ciphertext2);
-  auto ciphertextMultResult =
-      cryptoContext->EvalMult(ciphertextMul12, ciphertext3);
-
-  // Homomorphic rotations
-  auto ciphertextRot1 = cryptoContext->EvalAtIndex(ciphertext1, 1);
-  auto ciphertextRot2 = cryptoContext->EvalAtIndex(ciphertext1, 2);
-  auto ciphertextRot3 = cryptoContext->EvalAtIndex(ciphertext1, -1);
-  auto ciphertextRot4 = cryptoContext->EvalAtIndex(ciphertext1, -2);
-
-  // Sample Program: Step 5 - Decryption
-
-  // Decrypt the result of additions
-  Plaintext plaintextAddResult;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextAddResult,
-                         &plaintextAddResult);
-
-  // Decrypt the result of multiplications
-  Plaintext plaintextMultResult;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextMultResult,
-                         &plaintextMultResult);
-
-  // Decrypt the result of rotations
-  Plaintext plaintextRot1;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextRot1, &plaintextRot1);
-  Plaintext plaintextRot2;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextRot2, &plaintextRot2);
-  Plaintext plaintextRot3;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextRot3, &plaintextRot3);
-  Plaintext plaintextRot4;
-  cryptoContext->Decrypt(keyPair.secretKey, ciphertextRot4, &plaintextRot4);
-
-  plaintextRot1->SetLength(vectorOfInts1.size());
-  plaintextRot2->SetLength(vectorOfInts1.size());
-  plaintextRot3->SetLength(vectorOfInts1.size());
-  plaintextRot4->SetLength(vectorOfInts1.size());
-
-  std::cout << "Plaintext #1: " << plaintext1 << std::endl;
-  std::cout << "Plaintext #2: " << plaintext2 << std::endl;
-  std::cout << "Plaintext #3: " << plaintext3 << std::endl;
-
-  // Output results
-  std::cout << "\nResults of homomorphic computations" << std::endl;
-  std::cout << "#1 + #2 + #3: " << plaintextAddResult << std::endl;
-  std::cout << "#1 * #2 * #3: " << plaintextMultResult << std::endl;
-  std::cout << "Left rotation of #1 by 1: " << plaintextRot1 << std::endl;
-  std::cout << "Left rotation of #1 by 2: " << plaintextRot2 << std::endl;
-  std::cout << "Right rotation of #1 by 1: " << plaintextRot3 << std::endl;
-  std::cout << "Right rotation of #1 by 2: " << plaintextRot4 << std::endl;
 
 
   // program goal:
   // homomorphic password validator
   // requirements: one lowercase, one uppercase
   // no repeated characters
-
+  // going to restrict length to 8 chars, would pad
 
   return 0;
 }
