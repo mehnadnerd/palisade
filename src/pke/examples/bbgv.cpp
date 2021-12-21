@@ -164,19 +164,17 @@ int main() {
 
   // Sample Program: Step 3 - Encryption
 
-  // First plaintext vector is encoded
   std::vector<int64_t> pass1 = {'p', 'a', 's', 's', 'w', 'o', 'r', 'd'};
   std::vector<int64_t> pass2 = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
   std::vector<int64_t> pass3 = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
   std::vector<int64_t> pass4 = {'A', 'b', 'c', 'd', 'e', 'f', 'g', 'h'};
-
-  asdf(cryptoContext, keyPair, pass1);
-  asdf(cryptoContext, keyPair, pass2);
-  asdf(cryptoContext, keyPair, pass3);
-  asdf(cryptoContext, keyPair, pass4);
-
-
-
+  // First plaintext vector is encoded
+  for (int i = 0; i < 10; ++i) {
+    asdf(cryptoContext, keyPair, pass1);
+    asdf(cryptoContext, keyPair, pass2);
+    asdf(cryptoContext, keyPair, pass3);
+    asdf(cryptoContext, keyPair, pass4);
+  }
   // program goal:
   // homomorphic password validator
   // requirements: one lowercase, one uppercase
