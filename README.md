@@ -1,3 +1,9 @@
+Brendan's Notes:
+
+My benchmarks are under src/pke/examples, and can be built/run like the sample code suggested below. When runninng under ACE, OMP_NNUM_THREADS is recommended to be set to 1 because higher valuse do not improve performance.
+
+For the LVSM example, the demoData is available at https://gitlab.com/palisade/palisade-python-demo, I used the ion data.
+
 PALISADE Lattice Cryptography Library
 =====================================
 
