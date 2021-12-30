@@ -74,13 +74,13 @@ int main(int argc, char *argv[]) {
 
   vector<vector<double>> filters;
 
-  for (int i = 0; i < x.size(); ++i) {
+  for (int i = 0; i < (int)x.size(); ++i) {
     vector<double> f;
     f.reserve(i + rawfilter.size());
     for (int j = 0; j < i; j++) {
       f.push_back(0.0);
     }
-    for (int j = 0; j < rawfilter.size(); ++j) {
+    for (int j = 0; j < (int) rawfilter.size(); ++j) {
       f.push_back(rawfilter[j]);
     }
     filters.push_back(f);
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
 
   for (int count = 0; count < 100; count++) {
     std::vector<shared_ptr<CiphertextImpl<DCRTPoly>>> inners;
-    for (int i = 0; i < x.size(); ++i) {
+    for (int i = 0; i < (int) x.size(); ++i) {
       auto filter = cc->MakeCKKSPackedPlaintext(filters[i]);
       auto i1 = cc->EvalInnerProduct(c, filter, batchSize);
       inners.push_back(i1);
